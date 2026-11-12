@@ -37,10 +37,33 @@ falla en placas UK, así que todo va a `plate_unknown` + revisión manual:
 **Cómo se usa**: pipeline GStreamer `filesrc → decode → streammux → nvinfer (PGIE+SGIEs) → tracker → OSD → encode → filesink`, configurado con `.txt`/`.yml`.
 **Aquí**: `TrafficCamNet → NvDCF → LPDNet → LPRNet` sobre `carros.mp4` → `lpr_annotated.mp4` + `tracks.jsonl` (exporter propio en el probe).
 
-### Modelos TAO (TrafficCamNet / LPDNet / LPRNet-USA)
-**Qué son**: redes preentrenadas de NVIDIA para tráfico, distribuidas en ONNX por NGC.
-**Cómo se usan**: se descargan con `scripts/download-tao.sh` y `nvinfer` los convierte a engines TensorRT FP16 al primer run.
-**Aquí**: detección de coches (5.2M), de placas (915K) y lectura USA (56M). **0 epochs locales**: el USA falla en UK → todo a `plate_unknown`.
+### Modelos TAO (100% preentrenados NVIDIA, 0 epochs locales)
+
+### TrafficCamNet (detección de vehículos, PGIE)
+**Qué es**: detector DetectNet_v2 con backbone ResNet18 podado, entrenado por
+NVIDIA para 4 clases (`car, bicycle, person, road_sign`).
+**Cómo se usa**: ONNX `resnet18_trafficcamnet_pruned.onnx` (5.2M) → engine
+TensorRT FP16; entrada 960x544; aquí `batch-size 1`, `topk=40`,
+`pre-cluster-threshold=0.2` (se bajó de 0.4 para recuperar el carril izquierdo).
+**Para qué**: es el PGIE — propone todos los vehículos del frame que luego
+sigue el tracker y recortan los SGIE.
+
+### LPDNet-USA (detección de placas, SGIE)
+**Qué es**: detector DetectNet_v2 podado especializado en matrículas USA.
+**Cómo se usa**: ONNX `LPDNet_usa_pruned_tao5.onnx` (915K) → FP16; entrada
+640x480; corre solo sobre vehículos (`operate-on-gie-id=1`), con gate propio
+(los recortes <20px o fuera de ROI se descartan en el probe).
+**Para qué**: entregar recortes de placa limpios a LPRNet. En este video dispara
+~1130 veces; muchas son placas UK que el siguiente modelo no sabe leer.
+
+### LPRNet-USA (lectura de caracteres, SGIE)
+**Qué es**: clasificador secuencial (ResNet18 + CTC) que devuelve la cadena de
+la placa; entrada fija 48x96, salida parseada por
+`NvDsInferParseCustomNVPlate` + `dict_us.txt`.
+**Cómo se usa**: ONNX `us_lprnet_baseline18_deployable.onnx` (56M) → FP16.
+**Para qué**: leer el crop. Dato del fabricante: entrenado con ~310k placas USA
++ ~100k chinas (CCPD). En UK produce basura (`MWSLVSU`) con aciertos parciales
+(`EY09VMS` vs real `EY09 VWS`) → toda salida se degrada a `plate_unknown`.
 
 ### TensorRT
 **Qué es**: compilador de inferencia NVIDIA (fusiona capas, FP16/INT8).
