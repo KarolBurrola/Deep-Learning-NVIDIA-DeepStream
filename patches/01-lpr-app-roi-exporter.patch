@@ -1,0 +1,184 @@
+diff --git a/apps/tao_others/deepstream_lpr_app/deepstream_lpr_app.cpp b/apps/tao_others/deepstream_lpr_app/deepstream_lpr_app.cpp
+index c6e5764..de53820 100644
+--- a/apps/tao_others/deepstream_lpr_app/deepstream_lpr_app.cpp
++++ b/apps/tao_others/deepstream_lpr_app/deepstream_lpr_app.cpp
+@@ -28,6 +28,30 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <cuda_runtime_api.h>
++#include <fstream>
++#include <string>
++
++// ponytail: minimal JSONL exporter, path via TRACKS_JSONL else /work/outputs/tracks.jsonl
++static std::ofstream g_tracks;
++static int g_exp_frame = 0; // frame_meta->frame_num no avanza aqui; como frame_number de la app
++static const char *tracks_path() {
++  const char *p = getenv("TRACKS_JSONL");
++  return p && *p ? p : "/work/outputs/tracks.jsonl";
++}
++
++// ROI 1280x720 (coords muxer): solo calzada hacia camara
++static float ROI_POLY[4][2] = {{20, 720}, {1280, 720}, {1050, 180}, {420, 180}};
++static int in_roi(float x, float y) {
++  int inside = 0, n = 4;
++  for (int i = 0, j = n - 1; i < n; j = i++) {
++    float xi = ROI_POLY[i][0], yi = ROI_POLY[i][1];
++    float xj = ROI_POLY[j][0], yj = ROI_POLY[j][1];
++    if ((yi > y) != (yj > y) &&
++        (x < (xj - xi) * (y - yi) / (yj - yi) + xi))
++      inside = !inside;
++  }
++  return inside;
++}
+ 
+ #include "ds_yml_parse.h"
+ #include "gst-nvmessage.h"
+@@ -120,6 +144,9 @@ osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+     int offset = 0;
+     if (!frame_meta)
+       continue;
++    gint cur_frame = g_exp_frame++;
++    NvDsObjectMeta *drop_list[512];
++    int drop_n = 0;
+     for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+          l_obj = l_obj->next) {
+       obj_meta = (NvDsObjectMeta *)(l_obj->data);
+@@ -127,16 +154,33 @@ osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+       if (!obj_meta)
+         continue;
+ 
++      // ROI 1280x720: solo calzada hacia camara; fuera no se cuenta,
++      // no se dibuja. Vehiculos diminutos del fondo tampoco.
++      int kept = 1;
++      {
++        float cx = obj_meta->rect_params.left + obj_meta->rect_params.width / 2;
++        float cy = obj_meta->rect_params.top + obj_meta->rect_params.height / 2;
++        int is_veh = (obj_meta->unique_component_id == PRIMARY_DETECTOR_UID &&
++                      obj_meta->class_id == PGIE_CLASS_ID_VEHICLE);
++        if (!in_roi(cx, cy) ||
++            (is_veh && (obj_meta->rect_params.width < 20 ||
++                         obj_meta->rect_params.height < 20))) {
++          kept = 0;
++          if (drop_n < 512)
++            drop_list[drop_n++] = obj_meta;
++        }
++      }
++
+       /* Check that the object has been detected by the primary detector
+        * and that the class id is that of vehicles/persons. */
+-      if (obj_meta->unique_component_id == PRIMARY_DETECTOR_UID) {
++      if (kept && obj_meta->unique_component_id == PRIMARY_DETECTOR_UID) {
+         if (obj_meta->class_id == PGIE_CLASS_ID_VEHICLE)
+           vehicle_count++;
+         if (obj_meta->class_id == PGIE_CLASS_ID_PERSON)
+           person_count++;
+       }
+ 
+-      if (obj_meta->unique_component_id == SECONDARY_DETECTOR_UID) {
++      if (kept && obj_meta->unique_component_id == SECONDARY_DETECTOR_UID) {
+         if (obj_meta->class_id == SGIE_CLASS_ID_LPD) {
+           lp_count++;
+           /* Print this info only when operating in secondary model. */
+@@ -170,7 +214,7 @@ osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+                label_i++, l_label = l_label->next) {
+             label_info = (NvDsLabelInfo *)(l_label->data);
+             if (label_info) {
+-              if (label_info->label_id == 0 &&
++              if (kept && label_info->label_id == 0 &&
+                   label_info->result_class_id == 1) {
+                 g_print("Plate License %s\n", label_info->result_label);
+               }
+@@ -178,7 +222,64 @@ osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+           }
+         }
+       }
++      // exporter: one JSONL per object (vehicle=LPD parent link via parent id)
++      {
++        if (!g_tracks.is_open()) {
++          g_tracks.open(tracks_path(), std::ios::out | std::ios::trunc);
++        }
++          char plate_buf[128] = {0};
++          for (NvDsMetaList *lc = obj_meta->classifier_meta_list; lc;
++               lc = lc->next) {
++            NvDsClassifierMeta *cm = (NvDsClassifierMeta *)lc->data;
++            if (!cm || cm->unique_component_id != SECONDARY_CLASSIFIER_UID)
++              continue;
++            for (NvDsMetaList *ll = cm->label_info_list; ll; ll = ll->next) {
++              NvDsLabelInfo *li = (NvDsLabelInfo *)ll->data;
++              if (li && li->result_label[0]) {
++                snprintf(plate_buf, sizeof(plate_buf), "%s",
++                         li->result_label);
++                break;
++              }
++            }
++            if (plate_buf[0])
++              break;
++          }
++          guint64 parent_id = 0;
++          if (obj_meta->parent)
++            parent_id = ((NvDsObjectMeta *)obj_meta->parent)->object_id;
++          g_tracks << "{\"frame\":" << cur_frame << ",\"uid\":"
++                   << obj_meta->unique_component_id << ",\"cls\":"
++                   << obj_meta->class_id << ",\"track\":"
++                   << obj_meta->object_id << ",\"l\":"
++                   << obj_meta->rect_params.left << ",\"t\":"
++                   << obj_meta->rect_params.top << ",\"w\":"
++                   << obj_meta->rect_params.width << ",\"h\":"
++                   << obj_meta->rect_params.height << ",\"parent\":"
++                   << parent_id << ",\"plate\":\"" << plate_buf << "\",\"kept\":"
++                   << kept << "}\n";
++      }
++    }
++    // quitar del OSD lo fuera de ROI (y sus placas hijas, si las hubiera)
++    for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
++         l_obj = l_obj->next) {
++      NvDsObjectMeta *om = (NvDsObjectMeta *)l_obj->data;
++      if (om && om->unique_component_id == SECONDARY_DETECTOR_UID &&
++          om->parent) {
++        for (int k = 0; k < drop_n; k++) {
++          if (drop_list[k] == (NvDsObjectMeta *)om->parent) {
++            int dup = 0;
++            for (int j = 0; j < drop_n; j++)
++              if (drop_list[j] == om)
++                dup = 1;
++            if (!dup && drop_n < 512)
++              drop_list[drop_n++] = om;
++            break;
++          }
++        }
++      }
+     }
++    for (int k = 0; k < drop_n; k++)
++      nvds_remove_obj_meta_from_frame(frame_meta, drop_list[k]);
+ 
+     display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
+     NvOSD_TextParams *txt_params = &display_meta->text_params[0];
+diff --git a/configs/app/config_nvdsanalytics.txt b/configs/app/config_nvdsanalytics.txt
+index fc2d4d1..38d1021 100644
+--- a/configs/app/config_nvdsanalytics.txt
++++ b/configs/app/config_nvdsanalytics.txt
+@@ -17,7 +17,7 @@ config-height=1080
+ #osd-mode 0: Dont display any lines, rois and text
+ #         1: Display only lines, rois and static text i.e. labels
+ #         2: Display all info from 1 plus information about counts
+-osd-mode=2
++osd-mode=0
+ #Set OSD font size that has to be displayed
+ display-font-size=12
+ 
+diff --git a/configs/nvinfer/trafficcamnet_tao/pgie_trafficcamnet_config.txt b/configs/nvinfer/trafficcamnet_tao/pgie_trafficcamnet_config.txt
+index 7777006..27ef273 100644
+--- a/configs/nvinfer/trafficcamnet_tao/pgie_trafficcamnet_config.txt
++++ b/configs/nvinfer/trafficcamnet_tao/pgie_trafficcamnet_config.txt
+@@ -55,9 +55,9 @@ pre-cluster-threshold=0.2
+ 
+ ## Per class configurations
+ [class-attrs-0]
+-topk=20
++topk=40
+ nms-iou-threshold=0.5
+-pre-cluster-threshold=0.4
++pre-cluster-threshold=0.2
+ 
+ #[class-attrs-1]
+ #pre-cluster-threshold=0.05

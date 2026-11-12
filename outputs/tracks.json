@@ -1,0 +1,31 @@
+{
+  "mode": "demo",
+  "events": [
+    {
+      "event_id": "event_0001",
+      "track_id": 436,
+      "plate": "plate_unknown",
+      "raw_lpr": "EYD9VMS",
+      "speed_kmh": 8.5,
+      "limit_kmh": 8.0,
+      "timestamp_s": 30.333333333333332,
+      "calibration": "demo",
+      "review": "possible_violation",
+      "simulated": true,
+      "model": "TAO LPRNet-US (unreliable on UK)"
+    },
+    {
+      "event_id": "event_0002",
+      "track_id": 514,
+      "plate": "plate_unknown",
+      "raw_lpr": null,
+      "speed_kmh": 8.4,
+      "limit_kmh": 8.0,
+      "timestamp_s": 36.28333333333333,
+      "calibration": "demo",
+      "review": "possible_violation",
+      "simulated": true,
+      "model": "TAO LPRNet-US (unreliable on UK)"
+    }
+  ]
+}

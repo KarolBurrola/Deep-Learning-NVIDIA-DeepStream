@@ -1,0 +1,31 @@
+speed:
+  enabled: true
+  mode: demo  # calibrated | uncalibrated | demo
+  limit_kmh: 8
+  min_track_frames: 10
+  min_track_duration_seconds: 0.5
+
+violations:
+  enabled: true
+  require_valid_calibration: true
+  require_reliable_speed: true
+  max_events_per_track: 1
+
+plates:
+  enabled: true
+  min_confidence: 0.85
+
+# ROI 1280x720: solo calzada hacia camara (derecha). Opuesta excluida.
+roi:
+  polygon: [[20, 720], [1280, 720], [1050, 180], [420, 180]]
+
+# ROI 1280x720: solo calzada hacia camara (derecha). Opuesta excluida.
+roi:
+  polygon: [[140, 720], [1150, 720], [750, 180], [450, 180]]
+
+output:
+  save_video: true
+  save_csv: true
+  save_json: true
+  save_evidence: true
+  save_tickets: true

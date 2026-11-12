@@ -1,0 +1,41 @@
+diff --git a/apps/tao_others/deepstream_lpr_app/dict.txt b/apps/tao_others/deepstream_lpr_app/dict.txt
+new file mode 100644
+index 0000000..ce7f254
+--- /dev/null
++++ b/apps/tao_others/deepstream_lpr_app/dict.txt
+@@ -0,0 +1,35 @@
++0
++1
++2
++3
++4
++5
++6
++7
++8
++9
++A
++B
++C
++D
++E
++F
++G
++H
++I
++J
++K
++L
++M
++N
++P
++Q
++R
++S
++T
++U
++V
++W
++X
++Y
++Z

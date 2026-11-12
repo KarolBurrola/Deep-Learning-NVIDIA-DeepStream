@@ -1,0 +1,25 @@
+# videos y datos pesados (GitHub rechaza >100MB; el video se descarga aparte)
+*.mp4
+*.mp4:Zone.Identifier
+carros.mp4
+data/videos/
+# modelos y engines TAO (se descargan con scripts/download-tao.sh)
+*.onnx
+*.engine
+*.bin
+models/
+thirdparty/deepstream_tao_apps/models/
+# salidas (se regeneran con scripts/run.sh)
+outputs/
+inspect/
+# entorno python y contenedores
+.venv/
+__pycache__/
+uv.lock
+# codigo tercero completo (solo van nuestros patches/)
+thirdparty/
+!thirdparty/README.md
+# sistema
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,20 @@
+# reproducibilidad local (referencia; el run actual usa `docker run` directo)
+services:
+  deepstream:
+    image: ghcr.io/nvidia/deepstream:9.2-triton-multiarch
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - TRACKS_JSONL=/work/outputs/tracks.jsonl
+    volumes:
+      - ./thirdparty/deepstream_tao_apps:/workspace
+      - ./:/work
+    working_dir: /workspace/apps/tao_others/deepstream_lpr_app
+    command: ./deepstream-lpr-app /workspace/configs/app/lpr_app_yolo.yml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

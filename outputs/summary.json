@@ -1,0 +1,9 @@
+{
+  "frames": 139809,
+  "tracks": 401,
+  "plate_strings": 1134,
+  "events": 2,
+  "mode": "demo",
+  "fps": 60.0,
+  "note": "LPRNet-US unreliable on UK; all plates plate_unknown; demo speeds only"
+}
