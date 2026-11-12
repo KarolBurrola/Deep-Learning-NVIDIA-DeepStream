@@ -112,6 +112,24 @@ la placa; entrada fija 48x96, salida parseada por
   UK trivial vs TAO pesado, más comunidad. Para un prototipo rápido, YOLO habría
   llegado antes al primer resultado; aquí se eligió rendimiento a escala.
 
+### Por qué estos TAO y no YOLOs sueltos
+
+- **TrafficCamNet vs YOLO-vehículos**: DetectNet_v2 podado para 4 clases de
+  tráfico, con clustering NMS/DBSCAN ya calibrado en `nvinfer` (`topk`, umbrales
+  por clase). Un YOLO general detecta de todo (postes, sombras) y lo calibras tú.
+- **LPDNet-USA vs YOLO-placas**: detector de un solo propósito entrenado solo con
+  placas; corre como SGIE **solo sobre los coches** (`operate-on-gie-id`), no
+  sobre el frame entero — menos cómputo y menos falsos positivos que un YOLO
+  barriendo todo.
+- **LPRNet-USA vs OCR genérico**: no es un OCR (EasyOCR/Tesseract) adivinando
+  texto en cualquier lado: es un clasificador secuencial con entrada fija 48x96
+  y parser dedicado (`NvDsInferParseCustomNVPlate` + `dict_us.txt`). Más rápido
+  y preciso **en su dominio** (USA); fuera de él (UK) falla igual que fallaría un
+  YOLO entrenado en otro dominio — por eso todo va a `plate_unknown`.
+- **Juego combinado**: los tres salieron del mismo toolkit, con versiones
+  probadas juntas; con YOLO integras tres repos con tres formatos y tres
+  dependencias.
+
 ## Cómo se calcula la multa
 
 Detalle completo en [`docs/multa-metodo.md`](docs/multa-metodo.md): foot-point del
