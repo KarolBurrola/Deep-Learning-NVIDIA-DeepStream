@@ -30,16 +30,17 @@ falla en placas UK, así que todo va a `plate_unknown` + revisión manual:
 
 ![Multa](docs/img/multa.jpg)
 
-## Resultados medidos (`carros.mp4`: 3840x2160 h264 60fps 60s, UK)
+## Por qué DeepStream y no solo YOLO
 
-| Métrica | Valor |
-|---|---|
-| Pipeline | TrafficCamNet → NvDCF → LPDNet → LPRNet (`nvinfer`, sin Triton) |
-| Rendimiento | ~60.6 fps en RTX 4070 Laptop 8GB |
-| Frames / registros | 3600 frames → ~140k objetos (con `topk=40`) |
-| Tracks / placas | ~400 IDs, ~1130 lecturas LPR (descartadas: dominio USA≠UK) |
-| Eventos demo (límite 8) | 2 simulados (8.5 y 8.4 km/h demo) |
-| Eventos límite 60 | 0 (correcto: es un atasco) |
+- **Todo en GPU, sin copias**: decode → inferencia → tracking → OSD → encode
+  vía `NvBufSurface`. Medido ~60fps con 3 modelos en una laptop de 8GB; un
+  YOLO en Python+OpenCV rebota cada frame CPU↔GPU y rinde menos a igual hardware.
+- **Cascada nativa** coche → placa → caracteres (PGIE→SGIE) con parser propio y
+  FP16 por modelo vía TensorRT, en vez de pegar tres repos.
+- **Tracking con IDs integrado** (NvDCF); en YOLO lo añades tú (ByteTrack).
+- **Cuándo YOLO gana**: instalación `pip` vs contenedor 27GB, reentrenar a placas
+  UK trivial vs TAO pesado, más comunidad. Para un prototipo rápido, YOLO habría
+  llegado antes al primer resultado; aquí se eligió rendimiento a escala.
 
 ## Cómo se calcula la multa
 
