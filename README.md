@@ -120,6 +120,82 @@ bbox con timestamps del video → velocidad demo (`px/s × 0.12`, `simulated: tr
 evidencia. Sin homografía verificada no hay km/h real; la rama `calibrated`
 existe pero está inactiva. **100% modelos preentrenados NVIDIA, 0 epochs locales.**
 
+## Reproducir de cero (tutorial)
+
+0. **Requisitos**: Windows 11 + WSL2 (Ubuntu), driver NVIDIA ≥595.45
+   (`nvidia-smi` igual en Win y WSL), Docker con GPU
+   (`docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi`),
+   `uv`, `ffmpeg`, `vim`, ~35GB libres (imagen DeepStream 27GB).
+
+1. **Clonar este repo** y entrar:
+   ```bash
+   git clone https://github.com/KarolBurrola/Deep-Learning-NVIDIA-DeepStream.git
+   cd Deep-Learning-NVIDIA-DeepStream  # en WSL, filesystem Linux (no /mnt/c)
+   ```
+
+2. **Herramientas en WSL** (una vez):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   export PATH="$HOME/.local/bin:$PATH"
+   sudo apt-get update && sudo apt-get install -y ffmpeg
+   sudo usermod -aG docker $USER && newgrp docker
+   ```
+
+3. **Imagen DeepStream** (una vez, ~27GB):
+   ```bash
+   docker pull ghcr.io/nvidia/deepstream:9.2-triton-multiarch
+   docker run --rm --gpus all ghcr.io/nvidia/deepstream:9.2-triton-multiarch deepstream-app --version
+   ```
+
+4. **Repo de referencia NVIDIA + nuestros cambios**:
+   ```bash
+   mkdir -p thirdparty && cd thirdparty
+   git clone --depth 1 https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps.git
+   git -C deepstream_tao_apps apply ../../patches/01-lpr-app-roi-exporter.patch
+   git -C deepstream_tao_apps apply ../../patches/02-lpr-app-yolo-yml.patch
+   git -C deepstream_tao_apps apply ../../patches/03-dict-us.patch
+   cp deepstream_tao_apps/apps/tao_others/deepstream_lpr_app/dict_us.txt \
+      deepstream_tao_apps/apps/tao_others/deepstream_lpr_app/dict.txt
+   printf 'lpd\n' > deepstream_tao_apps/models/LPD_us/usa_lpd_label.txt
+   cp deepstream_tao_apps/apps/tao_others/deepstream_lpr_app/dict_us.txt \
+      deepstream_tao_apps/models/LPR_us/labels_us.txt
+   cd ..
+   ```
+   (El repo tercero no se versiona: solo viajan los `patches/`.)
+
+5. **Pesos TAO** (una vez, ~60MB):
+   ```bash
+   bash scripts/download-tao.sh   # TrafficCamNet + LPD-USA + LPR-USA desde NGC
+   ```
+
+6. **Compilar la app** (dentro del contenedor, sin instalar nada en el host):
+   ```bash
+   docker run --rm --gpus all -v $PWD/thirdparty/deepstream_tao_apps:/workspace \
+     ghcr.io/nvidia/deepstream:9.2-triton-multiarch \
+     make -C /workspace/apps/tao_others/deepstream_lpr_app
+   ```
+   Los engines TensorRT FP16 se generan solos en el primer run (tarda minutos).
+
+7. **Entorno Python** (automático): no hay que crear nada a mano —
+   `uv run --project .` usa `pyproject.toml` (`requires-python ==3.13.*`) y crea
+   `.venv` solo. Prueba: `uv run --project . python tests/unit/test_speed.py`.
+
+8. **Video**: pon tu MP4 donde quieras y pásalo con `--input`
+   (h264; el de este proyecto: 3840x2160, 60fps, 60s, autopista UK).
+
+9. **Correr**:
+   ```bash
+   ./scripts/run.sh --input <video>.mp4 --config configs/demo.yaml --output outputs/
+   ```
+   Hace: DeepStream (`lpr_annotated.mp4` + `tracks.jsonl`) → `src/mvp.py`
+   (`detections.csv`, `tracks.json`, `summary.json`, `tickets/`) → test.
+   Con `configs/default.yaml` (límite 60) salen 0 eventos en un atasco (correcto);
+   con `demo.yaml` (límite 8) salen tickets **simulados**.
+
+10. **Ver**: `outputs/multas_full.mp4` (multados con box seguidor),
+    `outputs/tickets/event_XXXX/ticket.html`. Si algo falla:
+    [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
 ## Uso
 
 ```bash
