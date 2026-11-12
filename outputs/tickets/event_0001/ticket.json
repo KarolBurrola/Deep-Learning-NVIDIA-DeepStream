@@ -1,0 +1,13 @@
+{
+  "event_id": "event_0001",
+  "track_id": 436,
+  "plate": "plate_unknown",
+  "raw_lpr": "EYD9VMS",
+  "speed_kmh": 8.5,
+  "limit_kmh": 8.0,
+  "timestamp_s": 30.333333333333332,
+  "calibration": "demo",
+  "review": "possible_violation",
+  "simulated": true,
+  "model": "TAO LPRNet-US (unreliable on UK)"
+}
