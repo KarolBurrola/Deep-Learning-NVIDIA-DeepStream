@@ -10,8 +10,9 @@ evidencia para los eventos que superan el límite configurado.
 
 ## Demo
 
-Video 10s (`outputs/demo_preview.mp4`, arrástralo al editor de GitHub para verlo embebido).
-Completo con multados marcados: `outputs/multas_full.mp4`. Anotado DeepStream: `outputs/lpr_annotated.mp4`.
+https://github.com/KarolBurrola/Deep-Learning-NVIDIA-DeepStream/raw/refs/heads/main/outputs/demo_preview.mp4
+
+Multados con box seguidor (10s). Completo 60s: [multas_full.mp4](https://github.com/KarolBurrola/Deep-Learning-NVIDIA-DeepStream/raw/refs/heads/main/outputs/multas_full.mp4). Anotado DeepStream: [lpr_annotated.mp4](https://github.com/KarolBurrola/Deep-Learning-NVIDIA-DeepStream/raw/refs/heads/main/outputs/lpr_annotated.mp4). Video fuente: [Release v0.1-mvp](https://github.com/KarolBurrola/Deep-Learning-NVIDIA-DeepStream/releases/tag/v0.1-mvp).
 
 ## Fotos
 
