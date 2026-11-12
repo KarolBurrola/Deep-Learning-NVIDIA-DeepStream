@@ -30,6 +30,53 @@ falla en placas UK, así que todo va a `plate_unknown` + revisión manual:
 
 ![Multa](docs/img/multa.jpg)
 
+## Herramientas usadas
+
+### DeepStream 9.2
+**Qué es**: SDK de NVIDIA para video-analítica con aceleración GPU total.
+**Cómo se usa**: pipeline GStreamer `filesrc → decode → streammux → nvinfer (PGIE+SGIEs) → tracker → OSD → encode → filesink`, configurado con `.txt`/`.yml`.
+**Aquí**: `TrafficCamNet → NvDCF → LPDNet → LPRNet` sobre `carros.mp4` → `lpr_annotated.mp4` + `tracks.jsonl` (exporter propio en el probe).
+
+### Modelos TAO (TrafficCamNet / LPDNet / LPRNet-USA)
+**Qué son**: redes preentrenadas de NVIDIA para tráfico, distribuidas en ONNX por NGC.
+**Cómo se usan**: se descargan con `scripts/download-tao.sh` y `nvinfer` los convierte a engines TensorRT FP16 al primer run.
+**Aquí**: detección de coches (5.2M), de placas (915K) y lectura USA (56M). **0 epochs locales**: el USA falla en UK → todo a `plate_unknown`.
+
+### TensorRT
+**Qué es**: compilador de inferencia NVIDIA (fusiona capas, FP16/INT8).
+**Cómo se usa**: aquí es automático — `nvinfer` genera el `.engine` la primera vez y lo reutiliza.
+**Aquí**: convierte los 3 ONNX; sin esto no hay 60fps en 8GB.
+
+### GStreamer
+**Qué es**: framework de pipelines multimedia por plugins.
+**Cómo se usa**: `gst-launch-1.0 ... ! nvv4l2decoder ! fakesink` para probar decode; la app arma el pipeline en C++.
+**Aquí**: verificación Fase 1 y pipeline final de la app LPR.
+
+### Docker + NVIDIA Container Toolkit
+**Qué es**: contenedores con acceso a GPU (vía CDI: `--gpus all`).
+**Cómo se usa**: `docker run --rm --gpus all -v repo:/workspace -v proyecto:/work deepstream:9.2...`.
+**Aquí**: compilar (`make`) y correr la app sin instalar DeepStream en el host. Ver `docker-compose.yml`.
+
+### WSL2 + driver Windows ≥595.45
+**Qué es**: Ubuntu 26.04 virtualizado con la GPU del host.
+**Cómo se usa**: todo el código vive en `/home/marti/yolo-nvidia` (nunca `/mnt/c`); el driver se instala solo en Windows.
+**Aquí**: entorno único de build+run. Trucos en `docs/troubleshooting.md` (ej. `wsl --shutdown` tras update).
+
+### `uv` + Python 3.13
+**Qué es**: gestor de paquetes/entornos Python rápido (`uv run`, `uv sync`, nada de `pip`).
+**Cómo se usa**: `uv run --project ~/yolo-nvidia python src/mvp.py ...`.
+**Aquí**: `SpeedEstimator`, `ViolationEngine`, generación de tickets/clips y `tests/unit/test_speed.py`.
+
+### ffmpeg 8
+**Qué es**: navaja suiza de video por línea de comandos.
+**Cómo se usa**: `ffprobe` (inspección), `-ss -i ... -frames:v 1` (evidencias), `drawbox`/`drawtext` con `enable='eq(n,FR)'` (box seguidor), `concat` (clips).
+**Aquí**: `evidence.jpg`, `multas_demo/full.mp4`, `demo_preview.mp4`, frames de docs.
+
+### vim / git / gh
+**Qué es**: editor de terminal, versiones y CLI de GitHub.
+**Cómo se usa**: todo el código se editó con vim; `scripts/run.sh` es el único entrypoint.
+**Aquí**: este repo + Release `v0.1-mvp` con el video fuente.
+
 ## Por qué DeepStream y no solo YOLO
 
 - **Todo en GPU, sin copias**: decode → inferencia → tracking → OSD → encode
